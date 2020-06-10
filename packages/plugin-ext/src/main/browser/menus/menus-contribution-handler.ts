@@ -41,6 +41,7 @@ import { ViewContextKeyService } from '../view/view-context-key-service';
 import { WebviewWidget } from '../webview/webview';
 import { Navigatable } from '@theia/core/lib/browser/navigatable';
 import { ContextKeyService } from '@theia/core/lib/browser/context-key-service';
+import { TIMELINE_ITEM_CONTEXT_MENU } from '@theia/timeline/lib/browser/timeline-tree-widget';
 
 type CodeEditorWidget = EditorWidget | WebviewWidget;
 export namespace CodeEditorWidget {
@@ -146,6 +147,16 @@ export class MenusContributionPointHandler {
                     const inline = menu.group && /^inline/.test(menu.group) || false;
                     const menuPath = inline ? ScmTreeWidget.RESOURCE_INLINE_MENU : ScmTreeWidget.RESOURCE_CONTEXT_MENU;
                     toDispose.push(this.registerScmMenuAction(menuPath, menu));
+                }
+            } else if (location === 'timeline/item/context') {
+                for (const menu of allMenus[location]) {
+                    toDispose.push(this.registerMenuAction(TIMELINE_ITEM_CONTEXT_MENU, menu,
+                        command => ({
+                            execute: (...args) => this.commands.executeCommand(command, ...args),
+                            isEnabled: (...args) => this.commands.isEnabled(command, ...args),
+                            isVisible: (...args) => this.commands.isVisible(command, ...args)
+                        })
+                    ));
                 }
             } else if (location === 'debug/callstack/context') {
                 for (const menu of allMenus[location]) {

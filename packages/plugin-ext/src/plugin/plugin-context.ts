@@ -117,7 +117,8 @@ import {
     CommentMode,
     CallHierarchyItem,
     CallHierarchyIncomingCall,
-    CallHierarchyOutgoingCall
+    CallHierarchyOutgoingCall,
+    TimelineItem
 } from './types-impl';
 import { SymbolKind } from '../common/plugin-api-rpc-model';
 import { EditorsAndDocumentsExtImpl } from './editors-and-documents';
@@ -148,6 +149,7 @@ import { DecorationsExtImpl } from './decorations';
 import { TextEditorExt } from './text-editor';
 import { ClipboardExt } from './clipboard-ext';
 import { WebviewsExtImpl } from './webviews';
+import { TimelineExtImpl } from './timeline';
 
 export function createAPIFactory(
     rpc: RPCProtocol,
@@ -180,6 +182,7 @@ export function createAPIFactory(
     const fileSystemExt = rpc.set(MAIN_RPC_CONTEXT.FILE_SYSTEM_EXT, new FileSystemExtImpl(rpc));
     const scmExt = rpc.set(MAIN_RPC_CONTEXT.SCM_EXT, new ScmExtImpl(rpc, commandRegistry));
     const decorationsExt = rpc.set(MAIN_RPC_CONTEXT.DECORATIONS_EXT, new DecorationsExtImpl(rpc));
+    const timelineExt = rpc.set(MAIN_RPC_CONTEXT.TIMELINE_EXT, new TimelineExtImpl(rpc, commandRegistry));
     rpc.set(MAIN_RPC_CONTEXT.DEBUG_EXT, debugExt);
 
     return function (plugin: InternalPlugin): typeof theia {
@@ -487,6 +490,9 @@ export function createAPIFactory(
             },
             onWillRenameFile(listener, thisArg?, disposables?): theia.Disposable {
                 return workspaceExt.onWillRenameFile(listener, thisArg, disposables);
+            },
+            registerTimelineProvider(scheme: string | string[], provider: theia.TimelineProvider): theia.Disposable {
+                return timelineExt.registerTimelineProvider(plugin, scheme, provider);
             }
         };
 
@@ -871,7 +877,8 @@ export function createAPIFactory(
             CommentMode,
             CallHierarchyItem,
             CallHierarchyIncomingCall,
-            CallHierarchyOutgoingCall
+            CallHierarchyOutgoingCall,
+            TimelineItem
         };
     };
 }

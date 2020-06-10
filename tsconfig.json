@@ -164,6 +164,12 @@
       ],
       "@theia/vsx-registry/lib/*": [
         "packages/vsx-registry/src/*"
+      ],
+      "@theia/timeline/lib/*": [
+        "packages/timeline/src/*"
+      ],
+      "@theia/timeline/*": [
+        "packages/timeline/*"
       ]
     }
   }
