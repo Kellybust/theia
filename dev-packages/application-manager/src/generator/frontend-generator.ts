@@ -139,7 +139,9 @@ const { ElectronSecurityToken } = require('@theia/core/lib/electron-common/elect
 
 const applicationName = \`${this.pck.props.frontend.config.applicationName}\`;
 const isSingleInstance = ${this.pck.props.backend.config.singleInstance === true ? 'true' : 'false'};
-const disallowReloadKeybinding = ${this.pck.props.frontend.config.disallowReloadKeybinding === true ? 'true' : 'false'};
+const disallowReloadKeybinding = ${this.pck.props.frontend.config.electron?.disallowReloadKeybinding === true ? 'true' : 'false'};
+const defaultWindowOptionsAdditions = ${this.prettyStringify(this.pck.props.frontend.config.electron?.windowOptions || {})};
+
 
 if (isSingleInstance && !app.requestSingleInstanceLock()) {
     // There is another instance running, exit now. The other instance will request focus.
@@ -154,6 +156,9 @@ const electronStore = new Storage();
 const electronSecurityToken = {
     value: v4(),
 };
+
+// Make it easy for renderer process to fetch the ElectronSecurityToken:
+global[ElectronSecurityToken] = electronSecurityToken;
 
 app.on('ready', () => {
 
@@ -184,22 +189,25 @@ app.on('ready', () => {
             width, height, x, y
         });
 
-        let windowOptions = electronStore.get('windowOptions');
+        const persistedWindowOptionsAdditions = electronStore.get('windowOptions', {});
 
-        if (!windowOptions) {
-            windowOptions = {
-                show: false,
-                title: applicationName,
-                width: windowState.width,
-                height: windowState.height,
-                minWidth: 200,
-                minHeight: 120,
-                x: windowState.x,
-                y: windowState.y,
-                isMaximized: windowState.isMaximized
-            };
-            electronStore.set('windowOptions', windowOptions);
-        }
+        const windowOptionsAdditions = {
+            ...defaultWindowOptionsAdditions,
+            ...persistedWindowOptionsAdditions
+        };
+
+        let windowOptions = {
+            show: false,
+            title: applicationName,
+            width: windowState.width,
+            height: windowState.height,
+            minWidth: 200,
+            minHeight: 120,
+            x: windowState.x,
+            y: windowState.y,
+            isMaximized: windowState.isMaximized,
+            ...windowOptionsAdditions
+        };
 
         // Always hide the window, we will show the window when it is ready to be shown in any case.
         const newWindow = new BrowserWindow(windowOptions);
@@ -299,8 +307,8 @@ app.on('ready', () => {
     ipcMain.on('set-window-options', (event, options) => {
         electronStore.set('windowOptions', options);
     });
-    ipcMain.on('get-window-options', event => {
-        event.returnValue = electronStore.get('windowOptions');
+    ipcMain.on('get-persisted-window-options-additions', event => {
+        event.returnValue = electronStore.get('windowOptions', {});
     });
 
     // Check whether we are in bundled application or development mode.
@@ -322,19 +330,26 @@ app.on('ready', () => {
         })
     }
 
-    const loadMainWindow = (port) => {
-        if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.session.cookies.set({
+    const setElectronSecurityToken = port => {
+        return new Promise((resolve, reject) => {
+            electron.session.defaultSession.cookies.set({
                 url: \`http://localhost:\${port}/\`,
                 name: ElectronSecurityToken,
                 value: JSON.stringify(electronSecurityToken),
+                httpOnly: true,
             }, error => {
                 if (error) {
-                    console.error(error);
+                    reject(error);
                 } else {
-                    mainWindow.loadURL('file://' + join(__dirname, '../../lib/index.html') + '?port=' + port);
+                    resolve();
                 }
             });
+        })
+    }
+
+    const loadMainWindow = port => {
+        if (!mainWindow.isDestroyed()) {
+            mainWindow.loadURL('file://' + join(__dirname, '../../lib/index.html') + '?port=' + port);
         }
     };
 
@@ -354,7 +369,8 @@ app.on('ready', () => {
     // But when in debugging we want to run everything in the same process to make things easier.
     if (noBackendFork) {
         process.env[ElectronSecurityToken] = JSON.stringify(electronSecurityToken);
-        require(mainPath).then(address => {
+        require(mainPath).then(async (address) => {
+            await setElectronSecurityToken(address.port);
             loadMainWindow(address.port);
         }).catch((error) => {
             console.error(error);
@@ -367,7 +383,8 @@ app.on('ready', () => {
         const cp = fork(mainPath, process.argv.slice(devMode ? 2 : 1), { env: Object.assign({
             [ElectronSecurityToken]: JSON.stringify(electronSecurityToken),
         }, process.env) });
-        cp.on('message', (address) => {
+        cp.on('message', async (address) => {
+            await setElectronSecurityToken(address.port);
             loadMainWindow(address.port);
         });
         cp.on('error', (error) => {

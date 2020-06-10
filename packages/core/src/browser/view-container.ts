@@ -369,11 +369,6 @@ export class ViewContainer extends BaseWidget implements StatefulWidget, Applica
         return { parts: partStates, title: this.titleOptions };
     }
 
-    /**
-     * The view container restores the visibility, order and relative sizes of contained
-     * widgets, but _not_ the widgets themselves. In case the set of widgets is not fixed,
-     * it should be restored in the specific subclass or in the widget holding the view container.
-     */
     restoreState(state: ViewContainer.State): void {
         this.lastVisibleState = state;
         this.doRestoreState(state);
@@ -403,10 +398,8 @@ export class ViewContainer extends BaseWidget implements StatefulWidget, Applica
             const part = parts[index];
             const partState = partStates.find(s => part.partId === s.partId);
             if (partState) {
+                part.setHidden(partState.hidden);
                 part.collapsed = partState.collapsed || !partState.relativeSize;
-                if (part.canHide) {
-                    part.setHidden(partState.hidden);
-                }
             } else if (part.canHide) {
                 part.hide();
             }

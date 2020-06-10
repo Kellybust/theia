@@ -30,7 +30,7 @@ import {
     QuickInputButton
 } from '../plugin/types-impl';
 import { UriComponents } from './uri-components';
-import { ConfigurationTarget } from '../plugin/types-impl';
+import { ConfigurationTarget, FileType, FileStat } from '../plugin/types-impl';
 import {
     SerializedDocumentFilter,
     CompletionContext,
@@ -58,8 +58,6 @@ import {
     Breakpoint,
     ColorPresentation,
     RenameLocation,
-    FileMoveEvent,
-    FileWillMoveEvent,
     SignatureHelpContext,
     CodeAction,
     CodeActionContext,
@@ -67,7 +65,10 @@ import {
     FoldingRange,
     SelectionRange,
     CallHierarchyDefinition,
-    CallHierarchyReference
+    CallHierarchyReference,
+    CreateFilesEventDTO,
+    RenameFilesEventDTO,
+    DeleteFilesEventDTO,
 } from './plugin-api-rpc-model';
 import { ExtPluginApi } from './plugin-ext-api-contribution';
 import { KeysToAnyValues, KeysToKeysToAnyValue } from './types';
@@ -85,7 +86,7 @@ export interface PreferenceData {
 }
 
 export interface Plugin {
-    pluginPath: string;
+    pluginPath: string | undefined;
     pluginFolder: string;
     model: PluginModel;
     rawModel: PluginPackage;
@@ -217,11 +218,12 @@ export interface CommandRegistryExt {
 export interface TerminalServiceExt {
     $terminalCreated(id: string, name: string): void;
     $terminalNameChanged(id: string, name: string): void;
-    $terminalOpened(id: string, processId: number): void;
+    $terminalOpened(id: string, processId: number, cols: number, rows: number): void;
     $terminalClosed(id: string): void;
+    $terminalOnInput(id: string, data: string): void;
+    $terminalSizeChanged(id: string, cols: number, rows: number): void;
     $currentTerminalChanged(id: string | undefined): void;
 }
-
 export interface OutputChannelRegistryExt {
     createOutputChannel(name: string, pluginInfo: PluginInfo): theia.OutputChannel
 }
@@ -245,7 +247,7 @@ export interface TerminalServiceMain {
      * Create new Terminal with Terminal options.
      * @param options - object with parameters to create new terminal.
      */
-    $createTerminal(id: string, options: theia.TerminalOptions): Promise<string>;
+    $createTerminal(id: string, options: theia.TerminalOptions, isPseudoTerminal?: boolean): Promise<string>;
 
     /**
      * Send text to the terminal by id.
@@ -254,6 +256,21 @@ export interface TerminalServiceMain {
      * @param addNewLine - in case true - add new line after the text, otherwise - don't apply new line.
      */
     $sendText(id: string, text: string, addNewLine?: boolean): void;
+
+    /**
+     * Write data to the terminal by id.
+     * @param id - terminal id.
+     * @param data - data.
+     */
+    $write(id: string, data: string): void;
+
+    /**
+     * Resize the terminal by id.
+     * @param id - terminal id.
+     * @param cols - columns.
+     * @param rows - rows.
+     */
+    $resize(id: string, cols: number, rows: number): void;
 
     /**
      * Show terminal on the UI panel.
@@ -507,8 +524,13 @@ export interface WorkspaceExt {
     $onWorkspaceFoldersChanged(event: WorkspaceRootsChangeEvent): void;
     $provideTextDocumentContent(uri: string): Promise<string | undefined>;
     $fileChanged(event: FileChangeEvent): void;
-    $onFileRename(event: FileMoveEvent): void;
-    $onWillRename(event: FileWillMoveEvent): Promise<any>;
+
+    $onWillCreateFiles(event: CreateFilesEventDTO): Promise<any[]>;
+    $onDidCreateFiles(event: CreateFilesEventDTO): void;
+    $onWillRenameFiles(event: RenameFilesEventDTO): Promise<any[]>;
+    $onDidRenameFiles(event: RenameFilesEventDTO): void;
+    $onWillDeleteFiles(event: DeleteFilesEventDTO): Promise<any[]>;
+    $onDidDeleteFiles(event: DeleteFilesEventDTO): void;
 }
 
 export interface TimelineExt {
@@ -1352,13 +1374,25 @@ export interface DebugMain {
 }
 
 export interface FileSystemExt {
+    $stat(handle: number, resource: UriComponents): Promise<FileStat>;
+    $readDirectory(handle: number, resource: UriComponents): Promise<[string, FileType][]>;
+    $createDirectory(handle: number, uri: UriComponents): Promise<void>;
     $readFile(handle: number, resource: UriComponents, options?: { encoding?: string }): Promise<string>;
     $writeFile(handle: number, resource: UriComponents, content: string, options?: { encoding?: string }): Promise<void>;
+    $delete(handle: number, resource: UriComponents, options: { recursive: boolean }): Promise<void>;
+    $rename(handle: number, source: UriComponents, target: UriComponents, options: { overwrite: boolean }): Promise<void>;
+    $copy(handle: number, source: UriComponents, target: UriComponents, options: { overwrite: boolean }): Promise<void>;
 }
 
 export interface FileSystemMain {
+    $stat(uri: UriComponents): Promise<FileStat>
+    $readDirectory(uri: UriComponents): Promise<[string, FileType][]>;
+    $createDirectory(uri: UriComponents): Promise<void>
     $readFile(uri: UriComponents): Promise<string>;
     $writeFile(uri: UriComponents, content: string): Promise<void>;
+    $delete(uri: UriComponents, options: { recursive: boolean }): Promise<void>;
+    $rename(source: UriComponents, target: UriComponents, options: { overwrite: boolean }): Promise<void>;
+    $copy(source: UriComponents, target: UriComponents, options: { overwrite: boolean }): Promise<void>;
     $registerFileSystemProvider(handle: number, scheme: string): void;
     $unregisterProvider(handle: number): void;
 }

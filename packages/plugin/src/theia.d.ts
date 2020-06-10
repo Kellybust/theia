@@ -2630,6 +2630,83 @@ declare module '@theia/plugin' {
     }
 
     /**
+     *  The dimensions of a terminal.
+     */
+    export interface TerminalDimensions {
+        /**
+         * The number of columns of the terminal.
+         */
+        readonly columns: number;
+
+        /**
+         * The number of rows of the terminal.
+         */
+        readonly rows: number;
+    }
+
+    /**
+     * Options a virtual process terminal.
+     */
+    export interface PseudoTerminalOptions {
+        /**
+         * The name of the terminal.
+         */
+        name: string;
+
+        /**
+         * An implementation of [Pseudoterminal](#Pseudoterminal) where an extension can
+         * control it.
+         */
+        pty: Pseudoterminal;
+    }
+
+    /**
+     * Defines the interface of a terminal pty, enabling extensions to control a terminal.
+     */
+    interface Pseudoterminal {
+        /**
+         * An event that when fired will write data to the terminal.
+         */
+        onDidWrite: Event<string>;
+
+        /**
+         * An event that when fired allows resizing the terminal.
+         */
+        onDidOverrideDimensions?: Event<TerminalDimensions | undefined>;
+
+        /**
+         * An event that when fired will close the pty.
+         */
+        onDidClose?: Event<void | number>;
+
+        /**
+         * Implement to handle when the pty is opened.
+         *
+         * @param dimensions The dimensions of the terminal.
+         */
+        open(dimensions: TerminalDimensions | undefined): void;
+
+        /**
+         * Implement to handle when the terminal is closed.
+         */
+        close(): void;
+
+        /**
+         * Implement to handle inputing data in the terminal.
+         *
+         * @param data The inputing data.
+         */
+        handleInput?(data: string): void;
+
+        /**
+         * Implement to handle when the number of rows and columns changes.
+         *
+         * @param dimensions The new dimensions.
+         */
+        setDimensions?(dimensions: TerminalDimensions): void;
+    }
+
+    /**
      * A plug-in context is a collection of utilities private to a
      * plug-in.
      *
@@ -3391,7 +3468,7 @@ declare module '@theia/plugin' {
         /**
          * Shows a file upload dialog to the user which allows to upload files
          * for various purposes.
-         * 
+         *
          * @param options Options, that control the dialog.
          * @returns A promise that resolves the paths of uploaded files or `undefined`.
          */
@@ -3509,6 +3586,15 @@ declare module '@theia/plugin' {
          * @param - terminal options.
          */
         export function createTerminal(options: TerminalOptions): Terminal;
+
+        /**
+         * Creates a pseudo where an extension controls its input and output.
+         *
+         * @param options PseudoTerminalOptions.
+         * @return A new Terminal.
+         */
+        export function createTerminal(options: PseudoTerminalOptions): Terminal;
+
 
         /**
          * Register a [TreeDataProvider](#TreeDataProvider) for the view contributed using the extension point `views`.
@@ -4528,6 +4614,32 @@ declare module '@theia/plugin' {
     export interface FileSystem {
 
         /**
+         * Retrieve metadata about a file.
+         *
+         * @param uri The uri of the file to retrieve metadata about.
+         * @return The file metadata about the file.
+         */
+        stat(uri: Uri): PromiseLike<FileStat>;
+
+        /**
+         * Retrieve all entries of a [directory](#FileType.Directory).
+         *
+         * @param uri The uri of the folder.
+         * @return An array of name/type-tuples or a PromiseLike that resolves to such.
+         */
+        readDirectory(uri: Uri): PromiseLike<[string, FileType][]>;
+
+        /**
+         * Create a new directory (Note, that new files are created via `write`-calls).
+         *
+         * *Note* that missing directories are created automatically, e.g this call has
+         * `mkdirp` semantics.
+         *
+         * @param uri The uri of the new folder.
+         */
+        createDirectory(uri: Uri): PromiseLike<void>;
+
+        /**
          * Read the entire contents of a file.
          *
          * @param uri The uri of the file.
@@ -4542,6 +4654,197 @@ declare module '@theia/plugin' {
          * @param content The new content of the file.
          */
         writeFile(uri: Uri, content: Uint8Array): PromiseLike<void>;
+
+        /**
+         * Delete a file.
+         *
+         * @param uri The resource that is to be deleted.
+         * @param options Defines if trash can should be used and if deletion of folders is recursive
+         */
+        delete(uri: Uri, options?: { recursive?: boolean, useTrash?: boolean }): PromiseLike<void>;
+
+        /**
+         * Rename a file or folder.
+         *
+         * @param source The existing file.
+         * @param target The new location.
+         * @param options Defines if existing files should be overwritten.
+         */
+        rename(source: Uri, target: Uri, options?: { overwrite?: boolean }): PromiseLike<void>;
+
+        /**
+         * Copy files or folders.
+         *
+         * @param source The existing file.
+         * @param target The destination location.
+         * @param options Defines if existing files should be overwritten.
+         */
+        copy(source: Uri, target: Uri, options?: { overwrite?: boolean }): PromiseLike<void>;
+    }
+
+    /**
+     * An event that is fired when files are going to be created.
+     *
+     * To make modifications to the workspace before the files are created,
+     * call the [`waitUntil](#FileWillCreateEvent.waitUntil)-function with a
+     * thenable that resolves to a [workspace edit](#WorkspaceEdit).
+     */
+    export interface FileWillCreateEvent {
+
+        /**
+         * The files that are going to be created.
+         */
+        readonly files: ReadonlyArray<Uri>;
+
+        /**
+         * Allows to pause the event and to apply a [workspace edit](#WorkspaceEdit).
+         *
+         * *Note:* This function can only be called during event dispatch and not
+         * in an asynchronous manner:
+         *
+         * ```ts
+         * workspace.onWillCreateFiles(event => {
+         *     // async, will *throw* an error
+         *     setTimeout(() => event.waitUntil(promise));
+         *
+         *     // sync, OK
+         *     event.waitUntil(promise);
+         * })
+         * ```
+         *
+         * @param thenable A thenable that delays saving.
+         */
+        waitUntil(thenable: Thenable<WorkspaceEdit>): void;
+
+        /**
+         * Allows to pause the event until the provided thenable resolves.
+         *
+         * *Note:* This function can only be called during event dispatch.
+         *
+         * @param thenable A thenable that delays saving.
+         */
+        waitUntil(thenable: Thenable<any>): void;
+    }
+
+    /**
+     * An event that is fired after files are created.
+     */
+    export interface FileCreateEvent {
+
+        /**
+         * The files that got created.
+         */
+        readonly files: ReadonlyArray<Uri>;
+    }
+
+    /**
+     * An event that is fired when files are going to be deleted.
+     *
+     * To make modifications to the workspace before the files are deleted,
+     * call the [`waitUntil](#FileWillCreateEvent.waitUntil)-function with a
+     * thenable that resolves to a [workspace edit](#WorkspaceEdit).
+     */
+    export interface FileWillDeleteEvent {
+
+        /**
+         * The files that are going to be deleted.
+         */
+        readonly files: ReadonlyArray<Uri>;
+
+        /**
+         * Allows to pause the event and to apply a [workspace edit](#WorkspaceEdit).
+         *
+         * *Note:* This function can only be called during event dispatch and not
+         * in an asynchronous manner:
+         *
+         * ```ts
+         * workspace.onWillCreateFiles(event => {
+         *     // async, will *throw* an error
+         *     setTimeout(() => event.waitUntil(promise));
+         *
+         *     // sync, OK
+         *     event.waitUntil(promise);
+         * })
+         * ```
+         *
+         * @param thenable A thenable that delays saving.
+         */
+        waitUntil(thenable: Thenable<WorkspaceEdit>): void;
+
+        /**
+         * Allows to pause the event until the provided thenable resolves.
+         *
+         * *Note:* This function can only be called during event dispatch.
+         *
+         * @param thenable A thenable that delays saving.
+         */
+        waitUntil(thenable: Thenable<any>): void;
+    }
+
+    /**
+     * An event that is fired after files are deleted.
+     */
+    export interface FileDeleteEvent {
+
+        /**
+         * The files that got deleted.
+         */
+        readonly files: ReadonlyArray<Uri>;
+    }
+
+    /**
+     * An event that is fired when files are going to be renamed.
+     *
+     * To make modifications to the workspace before the files are renamed,
+     * call the [`waitUntil](#FileWillCreateEvent.waitUntil)-function with a
+     * thenable that resolves to a [workspace edit](#WorkspaceEdit).
+     */
+    export interface FileWillRenameEvent {
+
+        /**
+         * The files that are going to be renamed.
+         */
+        readonly files: ReadonlyArray<{ oldUri: Uri, newUri: Uri }>;
+
+        /**
+         * Allows to pause the event and to apply a [workspace edit](#WorkspaceEdit).
+         *
+         * *Note:* This function can only be called during event dispatch and not
+         * in an asynchronous manner:
+         *
+         * ```ts
+         * workspace.onWillCreateFiles(event => {
+         *     // async, will *throw* an error
+         *     setTimeout(() => event.waitUntil(promise));
+         *
+         *     // sync, OK
+         *     event.waitUntil(promise);
+         * })
+         * ```
+         *
+         * @param thenable A thenable that delays saving.
+         */
+        waitUntil(thenable: Thenable<WorkspaceEdit>): void;
+
+        /**
+         * Allows to pause the event until the provided thenable resolves.
+         *
+         * *Note:* This function can only be called during event dispatch.
+         *
+         * @param thenable A thenable that delays saving.
+         */
+        waitUntil(thenable: Thenable<any>): void;
+    }
+
+    /**
+     * An event that is fired after files are renamed.
+     */
+    export interface FileRenameEvent {
+
+        /**
+         * The files that got renamed.
+         */
+        readonly files: ReadonlyArray<{ oldUri: Uri, newUri: Uri }>;
     }
 
     /**
@@ -4660,6 +4963,76 @@ declare module '@theia/plugin' {
          * An event that is emitted when a [text document](#TextDocument) is saved to disk.
          */
         export const onDidSaveTextDocument: Event<TextDocument>;
+
+        /**
+         * An event that is emitted when files are being created.
+         *
+         * *Note 1:* This event is triggered by user gestures, like creating a file from the
+         * explorer, or from the [`workspace.applyEdit`](#workspace.applyEdit)-api. This event is *not* fired when
+         * files change on disk, e.g triggered by another application, or when using the
+         * [`workspace.fs`](#FileSystem)-api.
+         *
+         * *Note 2:* When this event is fired, edits to files thare are being created cannot be applied.
+         */
+        export const onWillCreateFiles: Event<FileWillCreateEvent>;
+
+        /**
+         * An event that is emitted when files have been created.
+         *
+         * *Note:* This event is triggered by user gestures, like creating a file from the
+         * explorer, or from the [`workspace.applyEdit`](#workspace.applyEdit)-api, but this event is *not* fired when
+         * files change on disk, e.g triggered by another application, or when using the
+         * [`workspace.fs`](#FileSystem)-api.
+         */
+        export const onDidCreateFiles: Event<FileCreateEvent>;
+
+        /**
+         * An event that is emitted when files are being deleted.
+         *
+         * *Note 1:* This event is triggered by user gestures, like deleting a file from the
+         * explorer, or from the [`workspace.applyEdit`](#workspace.applyEdit)-api, but this event is *not* fired when
+         * files change on disk, e.g triggered by another application, or when using the
+         * [`workspace.fs`](#FileSystem)-api.
+         *
+         * *Note 2:* When deleting a folder with children only one event is fired.
+         */
+        export const onWillDeleteFiles: Event<FileWillDeleteEvent>;
+
+        /**
+         * An event that is emitted when files have been deleted.
+         *
+         * *Note 1:* This event is triggered by user gestures, like deleting a file from the
+         * explorer, or from the [`workspace.applyEdit`](#workspace.applyEdit)-api, but this event is *not* fired when
+         * files change on disk, e.g triggered by another application, or when using the
+         * [`workspace.fs`](#FileSystem)-api.
+         *
+         * *Note 2:* When deleting a folder with children only one event is fired.
+         */
+        export const onDidDeleteFiles: Event<FileDeleteEvent>;
+
+        /**
+         * An event that is emitted when files are being renamed.
+         *
+         * *Note 1:* This event is triggered by user gestures, like renaming a file from the
+         * explorer, and from the [`workspace.applyEdit`](#workspace.applyEdit)-api, but this event is *not* fired when
+         * files change on disk, e.g triggered by another application, or when using the
+         * [`workspace.fs`](#FileSystem)-api.
+         *
+         * *Note 2:* When renaming a folder with children only one event is fired.
+         */
+        export const onWillRenameFiles: Event<FileWillRenameEvent>;
+
+        /**
+         * An event that is emitted when files have been renamed.
+         *
+         * *Note 1:* This event is triggered by user gestures, like renaming a file from the
+         * explorer, and from the [`workspace.applyEdit`](#workspace.applyEdit)-api, but this event is *not* fired when
+         * files change on disk, e.g triggered by another application, or when using the
+         * [`workspace.fs`](#FileSystem)-api.
+         *
+         * *Note 2:* When renaming a folder with children only one event is fired.
+         */
+        export const onDidRenameFiles: Event<FileRenameEvent>;
 
         /**
          * Opens a document. Will return early if this document is already open. Otherwise

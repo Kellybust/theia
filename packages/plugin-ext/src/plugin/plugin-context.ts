@@ -357,7 +357,7 @@ export function createAPIFactory(
             onDidChangeWindowState(listener, thisArg?, disposables?): theia.Disposable {
                 return windowStateExt.onDidChangeWindowState(listener, thisArg, disposables);
             },
-            createTerminal(nameOrOptions: theia.TerminalOptions | (string | undefined), shellPath?: string, shellArgs?: string[]): theia.Terminal {
+            createTerminal(nameOrOptions: theia.TerminalOptions | theia.PseudoTerminalOptions | (string | undefined), shellPath?: string, shellArgs?: string[]): theia.Terminal {
                 return terminalExt.createTerminal(nameOrOptions, shellPath, shellArgs);
             },
             onDidCloseTerminal,
@@ -425,6 +425,24 @@ export function createAPIFactory(
             onDidSaveTextDocument(listener, thisArg?, disposables?) {
                 return documents.onDidSaveTextDocument(listener, thisArg, disposables);
             },
+            onWillCreateFiles(listener, thisArg?, disposables?) {
+                return workspaceExt.onWillCreateFiles(listener, thisArg, disposables);
+            },
+            onDidCreateFiles(listener, thisArg?, disposables?) {
+                return workspaceExt.onDidCreateFiles(listener, thisArg, disposables);
+            },
+            onWillRenameFiles(listener, thisArg?, disposables?) {
+                return workspaceExt.onWillRenameFiles(listener, thisArg, disposables);
+            },
+            onDidRenameFiles(listener, thisArg?, disposables?) {
+                return workspaceExt.onDidRenameFiles(listener, thisArg, disposables);
+            },
+            onWillDeleteFiles(listener, thisArg?, disposables?) {
+                return workspaceExt.onWillDeleteFiles(listener, thisArg, disposables);
+            },
+            onDidDeleteFiles(listener, thisArg?, disposables?) {
+                return workspaceExt.onDidDeleteFiles(listener, thisArg, disposables);
+            },
             getConfiguration(section?, resource?): theia.WorkspaceConfiguration {
                 return preferenceRegistryExt.getConfiguration(section, resource);
             },
@@ -483,13 +501,6 @@ export function createAPIFactory(
             ,
             registerTaskProvider(type: string, provider: theia.TaskProvider): theia.Disposable {
                 return tasks.registerTaskProvider(type, provider);
-            },
-            // Experimental API https://github.com/eclipse-theia/theia/issues/4167
-            onDidRenameFile(listener, thisArg?, disposables?): theia.Disposable {
-                return workspaceExt.onDidRenameFile(listener, thisArg, disposables);
-            },
-            onWillRenameFile(listener, thisArg?, disposables?): theia.Disposable {
-                return workspaceExt.onWillRenameFile(listener, thisArg, disposables);
             },
             registerTimelineProvider(scheme: string | string[], provider: theia.TimelineProvider): theia.Disposable {
                 return timelineExt.registerTimelineProvider(plugin, scheme, provider);
